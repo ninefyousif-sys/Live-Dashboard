@@ -144,33 +144,13 @@
       <div class="kpi-sub">Target: 98% · <span id="kpi-ftt-sub" style="color:#888780;"></span></div>
     </div>
     <div class="kpi" id="bol-card" style="border-left:5px solid #EF9F27;">
-      <div class="kpi-label">BOL OPR</div>
-      <div class="kpi-dual">
-        <div class="kpi-half">
-          <div class="micro">AVG HOURLY</div>
-          <div class="val" id="bol-avg" style="color:#EF9F27;">—</div>
-        </div>
-        <div class="divider"></div>
-        <div class="kpi-half">
-          <div class="micro">CUMULATIVE</div>
-          <div class="val" id="bol-cum" style="color:#EF9F27;">—</div>
-        </div>
-      </div>
+      <div class="kpi-label">BOL OPR <span style="font-size:11px;color:#5F5E5A;letter-spacing:0.5px;font-weight:400;">AVG HOURLY</span></div>
+      <div class="kpi-val" id="bol-avg" style="color:#EF9F27;">—</div>
       <div class="kpi-sub" id="bol-sub">Target: 88.2%</div>
     </div>
     <div class="kpi" id="skid-card" style="border-left:5px solid #378ADD;">
-      <div class="kpi-label">Empty Skid OPR</div>
-      <div class="kpi-dual">
-        <div class="kpi-half">
-          <div class="micro">AVG HOURLY</div>
-          <div class="val" id="skid-avg" style="color:#85B7EB;">—</div>
-        </div>
-        <div class="divider"></div>
-        <div class="kpi-half">
-          <div class="micro">CUMULATIVE</div>
-          <div class="val" id="skid-cum" style="color:#85B7EB;">—</div>
-        </div>
-      </div>
+      <div class="kpi-label">Empty Skid OPR <span style="font-size:11px;color:#5F5E5A;letter-spacing:0.5px;font-weight:400;">AVG HOURLY</span></div>
+      <div class="kpi-val" id="skid-avg" style="color:#85B7EB;">—</div>
       <div class="kpi-sub" id="skid-sub">Target: 83.3%</div>
     </div>
   </div>
@@ -401,7 +381,7 @@ function buildOprChart(canvasId, labels, data, lc, tgt, avg, avgC, bodies) {
       scales:{
         y:{min:40,max:100,ticks:{font:{size:13},callback:function(v){return v+'%';}},grid:{color:'#252527'}},
         y2:{position:'right',min:0,max:maxBodies*4,grid:{display:false},ticks:{display:false}},
-        x:{ticks:{font:{size:12}},grid:{display:false}}
+        x:{ticks:{font:{size:11},maxRotation:30},grid:{display:false}}
       }
     }
   });
@@ -451,16 +431,12 @@ function applyData(d) {
   document.getElementById('f-197').style.color   = lowSt ? '#EF9F27' : '#85B7EB';
   document.getElementById('lbl-197').style.color = lowSt ? '#EF9F27' : '#888780';
 
-  const bolC  = oprColor(o.bol_cum,  o.bol_target);
-  const skidC = oprColor(o.skid_cum, o.skid_target);
+  const bolC  = oprColor(o.bol_avg,  o.bol_target);
+  const skidC = oprColor(o.skid_avg, o.skid_target);
   document.getElementById('bol-avg').textContent  = o.bol_avg  + '%';
-  document.getElementById('bol-cum').textContent  = o.bol_cum  + '%';
   document.getElementById('skid-avg').textContent = o.skid_avg + '%';
-  document.getElementById('skid-cum').textContent = o.skid_cum + '%';
   document.getElementById('bol-avg').style.color  = bolC;
-  document.getElementById('bol-cum').style.color  = bolC;
   document.getElementById('skid-avg').style.color = skidC;
-  document.getElementById('skid-cum').style.color = skidC;
   document.getElementById('bol-card').style.borderLeftColor  = bolC;
   document.getElementById('skid-card').style.borderLeftColor = skidC;
   document.getElementById('bol-sub').textContent  = (bolC==='#5DCAA5'?'✓ Above':'✗ Below') + ' target ' + o.bol_target + '%';
@@ -480,12 +456,42 @@ function applyData(d) {
 }
 
 // ── Fetch directly from Snowflake ──
-// 8 production periods — targets are cumulative bodies by end of each period
+// 8 production periods
 const PROD_LABELS = ['06:00~07:00','07:00~08:00','08:10~09:10','09:10~10:00','10:40~11:40','11:40~12:30','12:40~13:40','13:40~14:40'];
-const BOL_SCHED   = [13, 25, 38, 48, 61, 71, 84, 97];
+const BOL_SCHED   = [13, 25, 38, 48, 61, 71, 84, 97];   // cumulative targets (for KPI cards)
 const SKID_SCHED  = [13, 27, 40, 51, 64, 75, 89, 102];
+const BOL_JPH     = [12.6, 12.6, 12.6, 10.5, 12.6, 10.5, 12.6, 12.6]; // per-period JPH (for chart)
+const SKID_JPH    = [13.3, 13.3, 13.3, 11.1, 13.3, 11.1, 13.3, 13.3];
 const BOL_TARGET  = 88.2;
 const SKID_TARGET = 83.3;
+
+// Period start/end in minutes from midnight — used for prorated OPR
+const PERIOD_MINS = [
+  {s: 6*60,      e: 7*60},       // 06:00~07:00  60 min
+  {s: 7*60,      e: 8*60},       // 07:00~08:00  60 min
+  {s: 8*60+10,   e: 9*60+10},   // 08:10~09:10  60 min
+  {s: 9*60+10,   e: 10*60},     // 09:10~10:00  50 min
+  {s: 10*60+40,  e: 11*60+40},  // 10:40~11:40  60 min
+  {s: 11*60+40,  e: 12*60+30},  // 11:40~12:30  50 min
+  {s: 12*60+40,  e: 13*60+40},  // 12:40~13:40  60 min
+  {s: 13*60+40,  e: 14*60+40}   // 13:40~14:40  60 min
+];
+
+// Returns prorated cumulative target for period p based on current time
+// If period is complete → full target; if in progress → proportional target
+function proratedTarget(sched, p) {
+  const now = new Date();
+  const nowMins = now.getHours()*60 + now.getMinutes();
+  const pw = PERIOD_MINS[p];
+  if (nowMins >= pw.e) return sched[p]; // period done — use full target
+  if (nowMins > pw.s) {
+    const prev     = p > 0 ? sched[p-1] : 0;
+    const elapsed  = nowMins - pw.s;
+    const duration = pw.e - pw.s;
+    return prev + (sched[p] - prev) * (elapsed / duration);
+  }
+  return sched[p];
+}
 
 async function fetchAndUpdate() {
   try {
@@ -519,7 +525,7 @@ async function fetchAndUpdate() {
         COUNT(DISTINCT CASE WHEN "registrationPointDescription"='155 Lsr Roofload out'   THEN "bodyNumber" END),
         COUNT(DISTINCT CASE WHEN "registrationPointDescription" LIKE '%197%'             THEN "bodyNumber" END),
         COUNT(DISTINCT CASE WHEN "registrationPointDescription" LIKE '%198%Decision%'    THEN "bodyNumber" END),
-        COUNT(DISTINCT CASE WHEN "registrationPointDescription" LIKE '%Heavy%'           THEN "bodyNumber" END)
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription"='198 Heavy Repair'      THEN "bodyNumber" END)
         FROM VCCH.PRODUCTION_TRACKING.BODY_TRACKING
         WHERE DATE("timestamp")=CURRENT_DATE() AND "productionBody"=TRUE`),
 
@@ -563,19 +569,41 @@ async function fetchAndUpdate() {
         periodMap[p] = { bol: parseInt(hourly[i][1])||0, skid: parseInt(hourly[i][2])||0 };
       }
     }
-    // Only show periods that have data (production has started)
+    // Build per-period OPR for chart (bodies that period ÷ JPH capacity for that period)
+    // KPI cards use cumulative OPR separately
     let bc=0, sc=0, bo=[], so=[], hrs=[], bolEach=[], skidEach=[];
+    let lastP = -1;
     for (let p=0; p<8; p++) {
-      if (!periodMap[p]) continue; // skip periods not yet started
+      if (!periodMap[p]) continue;
       const bHr = periodMap[p].bol;
       const sHr = periodMap[p].skid;
-      bc += bHr; sc += sHr;
-      bo.push(Math.round(bc/BOL_SCHED[p]*1000)/10);
-      so.push(Math.round(sc/SKID_SCHED[p]*1000)/10);
+      bc += bHr; sc += sHr; lastP = p;
+
+      // OPR = bodies produced ÷ max bodies possible for this period × 100, capped at 100%
+      // BOL_JPH / SKID_JPH already represent the physical MAX per period (not per hour):
+      //   60-min periods: 12.6 BOL / 13.3 Skid
+      //   50-min periods: 10.5 BOL / 11.1 Skid
+      // For in-progress periods, prorate by elapsed fraction of the window.
+      const pw = PERIOD_MINS[p];
+      const nowMins = new Date().getHours()*60 + new Date().getMinutes();
+      const frac = nowMins >= pw.e
+        ? 1
+        : Math.max((nowMins - pw.s) / (pw.e - pw.s), 1/(pw.e - pw.s));
+
+      const bolTgt  = BOL_JPH[p]  * frac;   // e.g. complete 60-min: 12.6; complete 50-min: 10.5
+      const skidTgt = SKID_JPH[p] * frac;
+      bo.push(Math.min(Math.round(bHr / bolTgt  * 1000) / 10, 100));
+      so.push(Math.min(Math.round(sHr / skidTgt * 1000) / 10, 100));
       hrs.push(PROD_LABELS[p]);
       bolEach.push(bHr);
       skidEach.push(sHr);
     }
+
+    // Cumulative OPR for KPI cards (total bodies ÷ prorated cumulative target)
+    const bolCumTgt  = lastP >= 0 ? proratedTarget(BOL_SCHED,  lastP) : 1;
+    const skidCumTgt = lastP >= 0 ? proratedTarget(SKID_SCHED, lastP) : 1;
+    const bolCumOpr  = lastP >= 0 ? Math.round(bc / bolCumTgt  * 1000) / 10 : 0;
+    const skidCumOpr = lastP >= 0 ? Math.round(sc / skidCumTgt * 1000) / 10 : 0;
 
     const t = totalsRaw[0] || [];
     const fRow = fttRaw[0] || ['0','0','0'];
@@ -583,6 +611,9 @@ async function fetchAndUpdate() {
     const fttPass  = parseInt(fRow[1])||0;
     const fttGeo   = parseInt(fRow[2])||0;
     const fttPct   = fttTotal > 0 ? Math.round(fttPass/fttTotal*1000)/10 : 0;
+    // Heavy Repair count = bodies that went through BOTH Empty Skid AND Heavy Repair today
+    // = total skid bodies minus those that passed FTT (fttPass already excludes HR bodies)
+    const heavyCount = fttTotal - fttPass;
 
     const d = {
       timestamp: new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}),
@@ -592,14 +623,14 @@ async function fetchAndUpdate() {
         st138: parseInt(t[2])||0, st139: parseInt(t[3])||0,
         st154: parseInt(t[4])||0, st155: parseInt(t[5])||0,
         st197: parseInt(t[6])||0, st198: parseInt(t[7])||0,
-        heavy: parseInt(t[8])||0
+        heavy: heavyCount
       },
       opr: {
         hours: hrs, bol_opr: bo, skid_opr: so,
         bol_avg:  bo.length ? Math.round(bo.reduce(function(a,b){return a+b;},0)/bo.length*10)/10 : 0,
         skid_avg: so.length ? Math.round(so.reduce(function(a,b){return a+b;},0)/so.length*10)/10 : 0,
-        bol_cum:  bo.length ? bo[bo.length-1] : 0,
-        skid_cum: so.length ? so[so.length-1] : 0,
+        bol_cum:  bolCumOpr,   // cumulative total vs cumulative target — for KPI card
+        skid_cum: skidCumOpr,
         bol_target: BOL_TARGET, skid_target: SKID_TARGET,
         bol_bodies: bolEach, skid_bodies: skidEach
       },
