@@ -506,8 +506,9 @@ async function fetchAndUpdate() {
         COUNT(DISTINCT CASE WHEN "registrationPointDescription"='998320 Empty Skid'   THEN "bodyNumber" END)
         FROM VCCH.PRODUCTION_TRACKING.BODY_TRACKING
         WHERE DATE("timestamp")=CURRENT_DATE() AND "productionBody"=TRUE
+        GROUP BY prod_period
         HAVING prod_period IS NOT NULL
-        GROUP BY prod_period ORDER BY 1`),
+        ORDER BY 1`),
 
       sfQuery(`SELECT
         COUNT(DISTINCT CASE WHEN "registrationPointDescription"='SPA2 BEV BodyOnLine'   THEN "bodyNumber" END),
