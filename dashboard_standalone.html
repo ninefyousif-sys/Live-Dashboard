@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A-Shop Body Shop — Live Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0e0e10; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
+  #tvWrap { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
+  #tvInner {
+    width: 1920px; height: 1080px;
+    transform-origin: top left;
+    padding: 26px 36px 20px;
+    display: flex; flex-direction: column; gap: 12px;
+    background: #0e0e10;
+  }
+  .hdr { display:flex; align-items:center; justify-content:space-between; height:56px; flex-shrink:0; }
+  .hdr h1 { font-size:30px; font-weight:400; color:#f0efeb; letter-spacing:-0.5px; }
+  .hdr p  { font-size:14px; color:#5F5E5A; margin-top:5px; }
+  .kpi-row { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; height:160px; flex-shrink:0; }
+  .kpi { background:#1a1a1c; border-radius:12px; padding:14px 20px; display:flex; flex-direction:column; justify-content:space-between; }
+  .kpi-label { font-size:14px; color:#888780; }
+  .kpi-val   { font-size:62px; font-weight:500; line-height:1; }
+  .kpi-sub   { font-size:13px; color:#444441; }
+  .kpi-dual  { display:flex; align-items:center; gap:18px; }
+  .kpi-half .micro { font-size:11px; color:#5F5E5A; letter-spacing:0.5px; margin-bottom:1px; }
+  .kpi-half .val   { font-size:50px; font-weight:500; line-height:1; }
+  .divider { width:1px; height:44px; background:#2e2e30; }
+  .flow { background:#1a1a1c; border-radius:12px; padding:0 20px; height:96px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; }
+  .fs { text-align:center; }
+  .fs-lbl { font-size:12px; color:#888780; margin-bottom:4px; }
+  .fs-val { font-size:36px; font-weight:500; line-height:1; }
+  .flow-arrow { font-size:20px; color:#2e2e30; }
+  .fs-green { border:2.5px solid #1D9E75; border-radius:9px; padding:6px 20px; background:#091810; }
+  .fs-green .fs-lbl { color:#5DCAA5; }
+  .fs-green .fs-val { color:#5DCAA5; }
+  .fs-red   { border:2.5px solid #993C1D; border-radius:9px; padding:6px 20px; background:#160a08; }
+  .fs-red .fs-lbl { color:#F0997B; }
+  .fs-red .fs-val { color:#F0997B; }
+  .chart-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; flex:1; min-height:0; }
+  .chart-card { background:#1a1a1c; border-radius:12px; padding:14px 18px; display:flex; flex-direction:column; overflow:hidden; }
+  .ct { font-size:16px; font-weight:500; color:#f0efeb; flex-shrink:0; }
+  .cs { font-size:12px; color:#888780; margin:2px 0 6px; flex-shrink:0; }
+  .legend { display:flex; gap:14px; margin-bottom:5px; flex-shrink:0; }
+  .leg { display:flex; align-items:center; gap:5px; font-size:12px; color:#888780; }
+  .leg-line { width:14px; height:3px; border-radius:2px; display:inline-block; }
+  .leg-dash { width:14px; height:0; display:inline-block; }
+  .canvas-wrap { flex:1; position:relative; min-height:0; }
+  .status-bar { position:fixed; bottom:0; left:0; right:0; background:#111113; padding:4px 16px; display:flex; gap:20px; font-size:11px; color:#5F5E5A; }
+  .dot { width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:5px; }
+  #errorBanner { display:none; position:fixed; top:0; left:0; right:0; background:#7a1a0a; color:#fff; text-align:center; padding:8px; font-size:14px; z-index:100; }
+  /* Password overlay */
+  #tokenOverlay {
+    position:fixed; inset:0; background:#0e0e10; z-index:999;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #tokenBox {
+    background:#1a1a1c; border:1px solid #2e2e30; border-radius:16px;
+    padding:48px 56px; width:400px; max-width:92vw; text-align:center;
+  }
+  #tokenBox .logo { font-size:12px; color:#5F5E5A; letter-spacing:2px; text-transform:uppercase; margin-bottom:14px; }
+  #tokenBox h2 { font-size:26px; font-weight:400; color:#f0efeb; margin-bottom:30px; }
+  #pwInput {
+    width:100%; background:#111113; border:1px solid #3a3a3c; border-radius:8px;
+    color:#f0efeb; font-size:28px; padding:14px 16px; text-align:center;
+    outline:none; margin-bottom:18px; letter-spacing:6px;
+  }
+  #pwInput:focus { border-color:#378ADD; }
+  #connectBtn {
+    width:100%; background:#378ADD; color:#fff; border:none; border-radius:8px;
+    padding:14px; font-size:16px; cursor:pointer; font-weight:500;
+  }
+  #connectBtn:hover { background:#4a9ee8; }
+  #tokenErr { color:#F0997B; font-size:13px; margin-top:12px; display:none; }
+  /* Settings gear */
+  #settingsBtn {
+    position:fixed; bottom:22px; right:16px; background:none; border:none;
+    color:#444441; font-size:18px; cursor:pointer; z-index:50; opacity:0.5;
+  }
+  #settingsBtn:hover { opacity:1; color:#888780; }
+  /* Production status pill */
+  #prodStatus {
+    display:inline-flex; align-items:center; gap:6px; margin-top:6px;
+    padding:4px 14px; border-radius:20px; font-size:12px; font-weight:500; white-space:nowrap;
+  }
+  .ps-running { background:#0d2018; color:#5DCAA5; border:1px solid #1D9E75; }
+  .ps-break   { background:#2a1c00; color:#EF9F27; border:1px solid #EF9F27; }
+  .ps-ended   { background:#1a1a1c; color:#5F5E5A; border:1px solid #2e2e30; }
+  .ps-pre     { background:#1a1a1c; color:#5F5E5A; border:1px solid #2e2e30; }
+</style>
+</head>
+<body>
+<!-- Password Overlay -->
+<div id="tokenOverlay">
+  <div id="tokenBox">
+    <div class="logo">Volvo Cars Charleston</div>
+    <h2>A-Shop Live Dashboard</h2>
+    <input id="pwInput" type="password" placeholder="••••••" autocomplete="off"
+      onkeydown="if(event.key==='Enter') connectWithToken()" />
+    <button id="connectBtn" onclick="connectWithToken()">Connect →</button>
+    <div id="tokenErr">Incorrect password. Try again.</div>
+  </div>
+</div>
+
+<button id="settingsBtn" title="Lock dashboard" onclick="document.getElementById('tokenOverlay').style.display='flex';document.getElementById('pwInput').value='';">⚙</button>
+
+<div id="errorBanner"></div>
+<div id="tvWrap"><div id="tvInner">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <div>
+      <h1>A-Shop Body Shop — Live Dashboard</h1>
+      <p>Volvo Cars Charleston</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:20px;">
+      <div style="background:#1a1a1c;border-radius:10px;padding:8px 18px;text-align:center;border:1px solid #2e2e30;">
+        <div style="font-size:12px;color:#888780;margin-bottom:2px;">Next refresh in</div>
+        <div id="countdown" style="font-size:22px;font-weight:500;color:#5DCAA5;">0:30</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="display:flex;align-items:center;gap:7px;justify-content:flex-end;">
+          <span class="dot" style="background:#1D9E75;"></span>
+          <span style="font-size:16px;color:#5DCAA5;font-weight:500;">Live</span>
+        </div>
+        <div style="font-size:13px;color:#5F5E5A;margin-top:3px;">Data as of <span id="dataTime">—</span></div>
+        <div id="clockEl" style="font-size:13px;color:#444441;margin-top:1px;">—</div>
+        <div id="prodStatus" class="ps-pre">○ Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="kpi-row">
+    <div class="kpi" style="border-left:5px solid #378ADD;">
+      <div class="kpi-label">Bodies to Paint Today</div>
+      <div class="kpi-val" style="color:#85B7EB;" id="kpi-skid">—</div>
+      <div class="kpi-sub">998320 Empty Skid · Heavy: <span id="kpi-heavy" style="color:#EF9F27;font-weight:500;">—</span></div>
+    </div>
+    <div class="kpi" style="border-left:5px solid #1D9E75;">
+      <div class="kpi-label">FTT Today</div>
+      <div class="kpi-val" id="kpi-ftt" style="color:#5DCAA5;">—</div>
+      <div class="kpi-sub">Target: 98% · <span id="kpi-ftt-sub" style="color:#888780;"></span></div>
+    </div>
+    <div class="kpi" id="bol-card" style="border-left:5px solid #EF9F27;">
+      <div class="kpi-label">BOL OPR</div>
+      <div class="kpi-dual">
+        <div class="kpi-half">
+          <div class="micro">AVG HOURLY</div>
+          <div class="val" id="bol-avg" style="color:#EF9F27;">—</div>
+        </div>
+        <div class="divider"></div>
+        <div class="kpi-half">
+          <div class="micro">CUMULATIVE</div>
+          <div class="val" id="bol-cum" style="color:#EF9F27;">—</div>
+        </div>
+      </div>
+      <div class="kpi-sub" id="bol-sub">Target: 88.2%</div>
+    </div>
+    <div class="kpi" id="skid-card" style="border-left:5px solid #378ADD;">
+      <div class="kpi-label">Empty Skid OPR</div>
+      <div class="kpi-dual">
+        <div class="kpi-half">
+          <div class="micro">AVG HOURLY</div>
+          <div class="val" id="skid-avg" style="color:#85B7EB;">—</div>
+        </div>
+        <div class="divider"></div>
+        <div class="kpi-half">
+          <div class="micro">CUMULATIVE</div>
+          <div class="val" id="skid-cum" style="color:#85B7EB;">—</div>
+        </div>
+      </div>
+      <div class="kpi-sub" id="skid-sub">Target: 83.3%</div>
+    </div>
+  </div>
+
+  <!-- FLOW STRIP -->
+  <div class="flow">
+    <div class="fs"><div class="fs-lbl">SPA2 BEV BOL</div><div class="fs-val" id="f-bol" style="color:#85B7EB;">—</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="fs"><div class="fs-lbl">138 Marriage</div><div class="fs-val" id="f-138" style="color:#85B7EB;">—</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="fs"><div class="fs-lbl">139 Stud Out</div><div class="fs-val" id="f-139" style="color:#85B7EB;">—</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="fs"><div class="fs-lbl">154 Framing</div><div class="fs-val" id="f-154" style="color:#85B7EB;">—</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="fs"><div class="fs-lbl">155 Roofload</div><div class="fs-val" id="f-155" style="color:#85B7EB;">—</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="fs"><div class="fs-lbl" id="lbl-197" style="color:#888780;">197 Door Out</div><div class="fs-val" id="f-197" style="color:#85B7EB;">—</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="fs"><div class="fs-lbl">198 Decision</div><div class="fs-val" id="f-198" style="color:#85B7EB;">—</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="fs fs-green"><div class="fs-lbl">Empty Skid</div><div class="fs-val" id="f-skid">—</div></div>
+    <div class="flow-arrow">↩</div>
+    <div class="fs fs-red"><div class="fs-lbl">Heavy Repair</div><div class="fs-val" id="f-heavy">—</div></div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="chart-row">
+    <div class="chart-card">
+      <div class="ct">OPR % — BOL · Hour by Hour</div>
+      <div class="cs">Cumulative per hour vs TakT · Target 88.2%</div>
+      <div class="legend">
+        <span class="leg"><span class="leg-line" style="background:#85B7EB;"></span>BOL OPR</span>
+        <span class="leg"><span class="leg-dash" style="border-top:2px dashed #EF9F27;"></span>88.2% target</span>
+        <span class="leg"><span class="leg-dash" style="border-top:2px dashed #5DCAA5;"></span><span id="bol-avg-legend">avg</span></span>
+      </div>
+      <div class="canvas-wrap"><canvas id="bolChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="ct">OPR % — Empty Skids · Hour by Hour</div>
+      <div class="cs">Cumulative per hour vs TakT · Target 83.3%</div>
+      <div class="legend">
+        <span class="leg"><span class="leg-line" style="background:#5DCAA5;"></span>Skid OPR</span>
+        <span class="leg"><span class="leg-dash" style="border-top:2px dashed #EF9F27;"></span>83.3% target</span>
+        <span class="leg"><span class="leg-dash" style="border-top:2px dashed #85B7EB;"></span><span id="skid-avg-legend">avg</span></span>
+      </div>
+      <div class="canvas-wrap"><canvas id="skidChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="ct">Daily Bodies to Paint</div>
+      <div class="cs" style="margin-bottom:14px;">Last 6 production days · 998320 Empty Skid</div>
+      <div class="canvas-wrap"><canvas id="tpChart"></canvas></div>
+    </div>
+  </div>
+
+</div></div>
+<div class="status-bar">
+  <span><span class="dot" style="background:#1D9E75;"></span>Volvo Cars Charleston · A-Shop BIW</span>
+  <span style="color:#888780;">Contact: Ninef Yousif · VCCH BIW Engineering</span>
+  <span id="statusTime">—</span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script>
+// ── Snowflake REST API ──
+const SF_URL = 'https://VOLVOCARS-MANUFACTURINGANALYTICS.snowflakecomputing.com/api/v2/statements';
+let SF_HDR = null;
+
+// Encoded token — decoded at runtime after password check
+const _tk = 'ZXlKcmFXUWlPaUl5TnpnM05qUTVNak16TXpjeU1UZ2lMQ0poYkdjaU9pSkZVekkxTmlKOS5leUp3SWpvaU5ESTFNelkxTWpnMk5UbzBNalV6TmpFNU16TXpJaXdpYVhOeklqb2lVMFk2TVRBeE1TSXNJbVY0Y0NJNk1UZ3dOVEl6TlRZMk0zMC5SSEt3NGJvN1REeXV0Y1ozeUF0R2NxMmpSM1BiNm5vMjBhWDVNam04M09ZTXYyeEJTc3hpZjNJZVdMYnFiMW9IODE1OEI0MzFCZGNha1pBdFZ1S0FUdw==';
+const _pw = 'vcchninefyousif';
+
+function connectWithToken() {
+  const entered = document.getElementById('pwInput').value.trim();
+  if (entered !== _pw) {
+    document.getElementById('tokenErr').style.display = 'block';
+    document.getElementById('pwInput').value = '';
+    return;
+  }
+  document.getElementById('tokenErr').style.display = 'none';
+  const pat = atob(_tk);
+  SF_HDR = {
+    'Authorization': 'Bearer ' + pat,
+    'X-Snowflake-Authorization-Token-Type': 'PROGRAMMATIC_ACCESS_TOKEN',
+    'Content-Type': 'application/json'
+  };
+  document.getElementById('tokenOverlay').style.display = 'none';
+  startDashboard();
+}
+
+async function sfQuery(sql, database, schema) {
+  const res = await fetch(SF_URL, {
+    method: 'POST',
+    headers: SF_HDR,
+    body: JSON.stringify({
+      statement: sql,
+      timeout: 60,
+      role: '9413-APP-POWERBI-PRO-LICENSE-USER',
+      warehouse: 'REPORTING',
+      database: database || 'VCCH',
+      schema: schema || 'PRODUCTION_TRACKING'
+    })
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error('Snowflake ' + res.status + ': ' + txt.substring(0,200));
+  }
+  const result = await res.json();
+  if (result.status === 'running') return await sfPoll(result.statementHandle);
+  if (result.status === 'failed') throw new Error(result.message || 'Query failed');
+  return result.data || [];
+}
+
+async function sfPoll(handle) {
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    const res = await fetch(SF_URL + '/' + handle, { headers: SF_HDR });
+    const result = await res.json();
+    if (result.status === 'complete') return result.data || [];
+    if (result.status === 'failed') throw new Error(result.message || 'Query failed');
+  }
+  throw new Error('Query timed out');
+}
+
+// ── Scale to viewport ──
+function scaleTV() {
+  const inner = document.getElementById('tvInner');
+  const scale = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+  inner.style.transform = 'scale(' + scale + ')';
+  inner.style.marginLeft = ((window.innerWidth  - 1920*scale)/2) + 'px';
+  inner.style.marginTop  = ((window.innerHeight - 1080*scale)/2) + 'px';
+}
+scaleTV(); window.addEventListener('resize', scaleTV);
+
+// ── Shift schedule ──
+const SHIFT_BREAKS = [
+  {s:[8,0],  e:[8,10]},
+  {s:[10,0], e:[10,40]},
+  {s:[12,30],e:[12,40]}
+];
+const SHIFT_S = 6*60, SHIFT_E = 14*60+40;
+
+function fmtT(hm) {
+  const ap = hm[0]>=12?'PM':'AM';
+  const h  = hm[0]>12?hm[0]-12:(hm[0]===0?12:hm[0]);
+  return h+':'+(hm[1]<10?'0':'')+hm[1]+' '+ap;
+}
+
+function updateProdStatus() {
+  const now  = new Date();
+  const mins = now.getHours()*60 + now.getMinutes();
+  const el   = document.getElementById('prodStatus');
+  if (!el) return;
+  if (mins < SHIFT_S) {
+    el.className='ps-pre'; el.textContent='○  Pre-Shift · Starts 6:00 AM'; return;
+  }
+  if (mins >= SHIFT_E) {
+    el.className='ps-ended'; el.textContent='○  Shift Ended · 2:40 PM'; return;
+  }
+  for (const b of SHIFT_BREAKS) {
+    const bs=b.s[0]*60+b.s[1], be=b.e[0]*60+b.e[1];
+    if (mins>=bs && mins<be) {
+      const left=be-mins;
+      el.className='ps-break';
+      el.textContent='◉  Break Time · Resumes in '+left+' min ('+fmtT(b.e)+')';
+      return;
+    }
+  }
+  let nxt=null;
+  for (const b of SHIFT_BREAKS) { if (b.s[0]*60+b.s[1]>mins){nxt=b;break;} }
+  el.className='ps-running';
+  el.textContent='●  Production Running'+(nxt?' · Next break '+fmtT(nxt.s):' · No more breaks today');
+}
+
+// ── Live clock ──
+setInterval(function(){
+  const t = new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('clockEl').textContent = t;
+  document.getElementById('statusTime').textContent = t;
+  updateProdStatus();
+}, 1000);
+updateProdStatus();
+
+// ── Chart setup ──
+Chart.defaults.color='#888780'; Chart.defaults.borderColor='#252527';
+Chart.register(ChartDataLabels);
+let bolChart=null, skidChart=null, tpChart=null;
+
+const ptC  = (v,t) => v>=t?'#5DCAA5':v>=t*.9?'#EF9F27':'#F0997B';
+const bgC  = (v,t) => v>=t?'#0d2018':v>=t*.9?'#2a1c00':'#2a0a0a';
+const oprColor = (v,t) => v>=t?'#5DCAA5':v>=t*.9?'#EF9F27':'#F0997B';
+
+function buildOprChart(canvasId, labels, data, lc, tgt, avg, avgC, bodies) {
+  const n = labels.length;
+  const maxBodies = bodies && bodies.length ? Math.max.apply(null,bodies) : 1;
+  const datasets = [
+    // Bodies per hour — bars in background
+    {type:'bar', data: bodies||[], yAxisID:'y2',
+      backgroundColor:'rgba(120,120,130,0.18)', borderColor:'rgba(120,120,130,0.3)',
+      borderWidth:1, borderRadius:4,
+      datalabels:{display:true,anchor:'end',align:'top',offset:1,
+        font:{size:11,weight:'500'},color:'#5F5E5A',
+        formatter:function(v){return v>0?v:'';}
+      }
+    },
+    // OPR % line
+    {type:'line', data, borderColor:lc, borderWidth:3, yAxisID:'y',
+      pointBackgroundColor:data.map(v=>ptC(v,tgt)),
+      pointBorderColor:'#0e0e10',pointBorderWidth:3,pointRadius:7,
+      fill:false,tension:0.35,
+      datalabels:{display:true,
+        align:function(ctx){const i=ctx.dataIndex;return i===0?'right':i===n-1?'left':data[i]>=(data[i-1]||0)?'top':'bottom';},
+        offset:7,font:{size:13,weight:'600'},
+        color:function(ctx){return ptC(ctx.dataset.data[ctx.dataIndex],tgt);},
+        backgroundColor:function(ctx){return bgC(ctx.dataset.data[ctx.dataIndex],tgt);},
+        borderRadius:5,padding:{top:3,bottom:3,left:6,right:6},
+        formatter:function(v){return v+'%';}}
+    },
+    {type:'line',data:Array(n).fill(tgt),borderColor:'#EF9F27',borderWidth:2,borderDash:[8,5],pointRadius:0,fill:false,yAxisID:'y',datalabels:{display:false}},
+    {type:'line',data:Array(n).fill(avg),borderColor:avgC,borderWidth:1.5,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y',datalabels:{display:false}}
+  ];
+  return new Chart(document.getElementById(canvasId), {
+    type:'bar',
+    data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      layout:{padding:{top:28,left:6,right:6}},
+      plugins:{legend:{display:false},datalabels:{}},
+      scales:{
+        y:{min:40,max:100,ticks:{font:{size:13},callback:function(v){return v+'%';}},grid:{color:'#252527'}},
+        y2:{position:'right',min:0,max:maxBodies*4,grid:{display:false},ticks:{display:false}},
+        x:{ticks:{font:{size:12}},grid:{display:false}}
+      }
+    }
+  });
+}
+
+function buildTpChart(labels, data) {
+  const colors = data.map(function(_,i){return i===data.length-1?'#EF9F27':'#378ADD';});
+  return new Chart(document.getElementById('tpChart'),{
+    type:'bar',
+    data:{labels,datasets:[{data,backgroundColor:colors,borderRadius:6,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        datalabels:{display:true,anchor:'end',align:'top',offset:5,font:{size:14,weight:'600'},
+          color:data.map(function(_,i){return i===data.length-1?'#EF9F27':'#85B7EB';}),
+          formatter:function(v){return v;}}},
+      scales:{y:{min:55,max:Math.max.apply(null,data)+15,ticks:{font:{size:13}},grid:{color:'#252527'}},
+              x:{ticks:{font:{size:13}},grid:{display:false}}}}
+  });
+}
+
+// ── Apply data to DOM ──
+function applyData(d) {
+  const o = d.opr, t = d.totals, f = d.ftt || {};
+  document.getElementById('dataTime').textContent = d.timestamp;
+
+  document.getElementById('kpi-skid').textContent  = t.skid;
+  document.getElementById('kpi-heavy').textContent = t.heavy;
+  document.getElementById('f-bol').textContent  = t.bol;
+  document.getElementById('f-138').textContent  = t.st138;
+  document.getElementById('f-139').textContent  = t.st139;
+  document.getElementById('f-154').textContent  = t.st154;
+  document.getElementById('f-155').textContent  = t.st155;
+  document.getElementById('f-197').textContent  = t.st197;
+  document.getElementById('f-198').textContent  = t.st198;
+  document.getElementById('f-skid').textContent = t.skid;
+  document.getElementById('f-heavy').textContent= t.heavy;
+
+  if (f.pct !== undefined) {
+    const fttColor = f.pct >= 98 ? '#5DCAA5' : '#EF9F27';
+    document.getElementById('kpi-ftt').textContent = f.pct + '%';
+    document.getElementById('kpi-ftt').style.color = fttColor;
+    const geoTxt = f.geo_excl > 0 ? ' · ' + f.geo_excl + ' GEO excl.' : '';
+    document.getElementById('kpi-ftt-sub').textContent = f.pass + ' of ' + f.total + ' bodies' + geoTxt;
+  }
+
+  const lowSt = t.st197 < t.st139 * 0.95;
+  document.getElementById('f-197').style.color   = lowSt ? '#EF9F27' : '#85B7EB';
+  document.getElementById('lbl-197').style.color = lowSt ? '#EF9F27' : '#888780';
+
+  const bolC  = oprColor(o.bol_cum,  o.bol_target);
+  const skidC = oprColor(o.skid_cum, o.skid_target);
+  document.getElementById('bol-avg').textContent  = o.bol_avg  + '%';
+  document.getElementById('bol-cum').textContent  = o.bol_cum  + '%';
+  document.getElementById('skid-avg').textContent = o.skid_avg + '%';
+  document.getElementById('skid-cum').textContent = o.skid_cum + '%';
+  document.getElementById('bol-avg').style.color  = bolC;
+  document.getElementById('bol-cum').style.color  = bolC;
+  document.getElementById('skid-avg').style.color = skidC;
+  document.getElementById('skid-cum').style.color = skidC;
+  document.getElementById('bol-card').style.borderLeftColor  = bolC;
+  document.getElementById('skid-card').style.borderLeftColor = skidC;
+  document.getElementById('bol-sub').textContent  = (bolC==='#5DCAA5'?'✓ Above':'✗ Below') + ' target ' + o.bol_target + '%';
+  document.getElementById('bol-sub').style.color  = bolC;
+  document.getElementById('skid-sub').textContent = (skidC==='#5DCAA5'?'✓ Above':'✗ Below') + ' target ' + o.skid_target + '%';
+  document.getElementById('skid-sub').style.color = skidC;
+  document.getElementById('bol-avg-legend').textContent  = o.bol_avg  + '% avg';
+  document.getElementById('skid-avg-legend').textContent = o.skid_avg + '% avg';
+
+  if (bolChart)  { bolChart.destroy();  bolChart  = null; }
+  if (skidChart) { skidChart.destroy(); skidChart = null; }
+  if (tpChart)   { tpChart.destroy();   tpChart   = null; }
+
+  bolChart  = buildOprChart('bolChart',  o.hours, o.bol_opr,  '#85B7EB', o.bol_target,  o.bol_avg,  '#5DCAA5', o.bol_bodies);
+  skidChart = buildOprChart('skidChart', o.hours, o.skid_opr, '#5DCAA5', o.skid_target, o.skid_avg, '#85B7EB', o.skid_bodies);
+  tpChart   = buildTpChart(d.history.map(function(h){return h.day;}), d.history.map(function(h){return h.bodies;}));
+}
+
+// ── Fetch directly from Snowflake ──
+const BOL_SCHED  = [13,25,38,48,61,71,84,97,97,97,97];
+const SKID_SCHED = [13,27,40,51,64,75,89,102,102,102,102];
+const BOL_TARGET  = 88.2;
+const SKID_TARGET = 83.3;
+
+async function fetchAndUpdate() {
+  try {
+    const [hourly, totalsRaw, hist, fttRaw] = await Promise.all([
+
+      sfQuery(`SELECT HOUR("timestamp"),
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription"='SPA2 BEV BodyOnLine' THEN "bodyNumber" END),
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription"='998320 Empty Skid'   THEN "bodyNumber" END),
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription" LIKE '%Heavy%'        THEN "bodyNumber" END)
+        FROM VCCH.PRODUCTION_TRACKING.BODY_TRACKING
+        WHERE DATE("timestamp")=CURRENT_DATE() AND "productionBody"=TRUE
+        GROUP BY HOUR("timestamp") ORDER BY 1`),
+
+      sfQuery(`SELECT
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription"='SPA2 BEV BodyOnLine'   THEN "bodyNumber" END),
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription"='998320 Empty Skid'      THEN "bodyNumber" END),
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription"='138 Marriage Out'       THEN "bodyNumber" END),
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription"='139 Stud Out'           THEN "bodyNumber" END),
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription"='154 Framing Out'        THEN "bodyNumber" END),
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription"='155 Lsr Roofload out'   THEN "bodyNumber" END),
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription" LIKE '%197%'             THEN "bodyNumber" END),
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription" LIKE '%198%Decision%'    THEN "bodyNumber" END),
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription" LIKE '%Heavy%'           THEN "bodyNumber" END)
+        FROM VCCH.PRODUCTION_TRACKING.BODY_TRACKING
+        WHERE DATE("timestamp")=CURRENT_DATE() AND "productionBody"=TRUE`),
+
+      sfQuery(`SELECT TO_VARCHAR(DATE("timestamp"),'MON DD'), COUNT(DISTINCT "bodyNumber")
+        FROM VCCH.PRODUCTION_TRACKING.BODY_TRACKING
+        WHERE DATE("timestamp")>=DATEADD(day,-8,CURRENT_DATE())
+          AND DATE("timestamp")<CURRENT_DATE()
+          AND "productionBody"=TRUE
+          AND "registrationPointDescription"='998320 Empty Skid'
+          AND DAYOFWEEK("timestamp") NOT IN (0,6)
+        GROUP BY DATE("timestamp"),TO_VARCHAR(DATE("timestamp"),'MON DD')
+        ORDER BY DATE("timestamp") ASC LIMIT 6`),
+
+      sfQuery(`WITH skid_bodies AS (
+          SELECT DISTINCT "bodyNumber" FROM VCCH.PRODUCTION_TRACKING.BODY_TRACKING
+          WHERE DATE("timestamp")=CURRENT_DATE() AND "productionBody"=TRUE
+            AND "registrationPointDescription"='998320 Empty Skid'
+        ), heavy_bodies AS (
+          SELECT DISTINCT "bodyNumber" FROM VCCH.PRODUCTION_TRACKING.BODY_TRACKING
+          WHERE DATE("timestamp")=CURRENT_DATE() AND "productionBody"=TRUE
+            AND "registrationPointDescription"='198 Heavy Repair'
+        ), geo_bodies AS (
+          SELECT DISTINCT "bodyNumber" FROM VCCH.ATACQ_VCCH.ATACQ_ITEM_EVENT
+          WHERE "atacqItemFamilyCode"='GEO' AND "linkTimestamp">=DATEADD(day,-14,CURRENT_DATE())
+        )
+        SELECT
+          COUNT(DISTINCT s."bodyNumber"),
+          COUNT(DISTINCT CASE WHEN h."bodyNumber" IS NULL OR g."bodyNumber" IS NOT NULL THEN s."bodyNumber" END),
+          COUNT(DISTINCT CASE WHEN h."bodyNumber" IS NOT NULL AND g."bodyNumber" IS NOT NULL THEN s."bodyNumber" END)
+        FROM skid_bodies s
+        LEFT JOIN heavy_bodies h ON s."bodyNumber"=h."bodyNumber"
+        LEFT JOIN geo_bodies g ON s."bodyNumber"=g."bodyNumber"`)
+    ]);
+
+    // Process OPR hourly
+    let bc=0, sc=0, bo=[], so=[], hrs=[], bolEach=[], skidEach=[];
+    for (let i=0; i<hourly.length; i++) {
+      const hr = parseInt(hourly[i][0]);
+      if (hr < 6) continue;
+      const idx = Math.min(hr-6, BOL_SCHED.length-1);
+      const bHr = parseInt(hourly[i][1])||0;
+      const sHr = parseInt(hourly[i][2])||0;
+      bc += bHr; sc += sHr;
+      bo.push(Math.round(bc/BOL_SCHED[idx]*1000)/10);
+      so.push(Math.round(sc/SKID_SCHED[idx]*1000)/10);
+      hrs.push((hr<10?'0':'')+hr+':00');
+      bolEach.push(bHr);
+      skidEach.push(sHr);
+    }
+
+    const t = totalsRaw[0] || [];
+    const fRow = fttRaw[0] || ['0','0','0'];
+    const fttTotal = parseInt(fRow[0])||0;
+    const fttPass  = parseInt(fRow[1])||0;
+    const fttGeo   = parseInt(fRow[2])||0;
+    const fttPct   = fttTotal > 0 ? Math.round(fttPass/fttTotal*1000)/10 : 0;
+
+    const d = {
+      timestamp: new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+      ftt: {pct:fttPct, pass:fttPass, total:fttTotal, geo_excl:fttGeo},
+      totals: {
+        bol:   parseInt(t[0])||0, skid:  parseInt(t[1])||0,
+        st138: parseInt(t[2])||0, st139: parseInt(t[3])||0,
+        st154: parseInt(t[4])||0, st155: parseInt(t[5])||0,
+        st197: parseInt(t[6])||0, st198: parseInt(t[7])||0,
+        heavy: parseInt(t[8])||0
+      },
+      opr: {
+        hours: hrs, bol_opr: bo, skid_opr: so,
+        bol_avg:  bo.length ? Math.round(bo.reduce(function(a,b){return a+b;},0)/bo.length*10)/10 : 0,
+        skid_avg: so.length ? Math.round(so.reduce(function(a,b){return a+b;},0)/so.length*10)/10 : 0,
+        bol_cum:  bo.length ? bo[bo.length-1] : 0,
+        skid_cum: so.length ? so[so.length-1] : 0,
+        bol_target: BOL_TARGET, skid_target: SKID_TARGET,
+        bol_bodies: bolEach, skid_bodies: skidEach
+      },
+      history: hist.map(function(r){return {day:r[0], bodies:parseInt(r[1])||0};})
+    };
+
+    document.getElementById('errorBanner').style.display = 'none';
+    applyData(d);
+
+  } catch(e) {
+    document.getElementById('errorBanner').textContent = '⚠ Data error: ' + e.message + ' — retrying in 30s';
+    document.getElementById('errorBanner').style.display = 'block';
+    console.error(e);
+  }
+}
+
+// ── Countdown & auto-refresh every 30s ──
+let secs = 5;
+let dashboardStarted = false;
+function tickCountdown() {
+  secs--;
+  if (secs <= 0) {
+    secs = 30;
+    document.getElementById('countdown').style.color = '#5DCAA5';
+    fetchAndUpdate();
+    return;
+  }
+  document.getElementById('countdown').textContent = '0:' + (secs<10?'0':'') + secs;
+  if (secs <= 10) document.getElementById('countdown').style.color = '#EF9F27';
+}
+
+function startDashboard() {
+  if (dashboardStarted) return;
+  dashboardStarted = true;
+  secs = 5;
+  setInterval(tickCountdown, 1000);
+  fetchAndUpdate();
+}
+</script>
+</body>
+</html>
