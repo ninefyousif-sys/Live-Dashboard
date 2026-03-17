@@ -480,8 +480,10 @@ function applyData(d) {
 }
 
 // ── Fetch directly from Snowflake ──
-const BOL_SCHED  = [13,25,38,48,61,71,84,97,97,97,97];
-const SKID_SCHED = [13,27,40,51,64,75,89,102,102,102,102];
+// 8 production periods — targets are cumulative bodies by end of each period
+const PROD_LABELS = ['06:00~07:00','07:00~08:00','08:10~09:10','09:10~10:00','10:40~11:40','11:40~12:30','12:40~13:40','13:40~14:40'];
+const BOL_SCHED   = [13, 25, 38, 48, 61, 71, 84, 97];
+const SKID_SCHED  = [13, 27, 40, 51, 64, 75, 89, 102];
 const BOL_TARGET  = 88.2;
 const SKID_TARGET = 83.3;
 
@@ -489,13 +491,23 @@ async function fetchAndUpdate() {
   try {
     const [hourly, totalsRaw, hist, fttRaw] = await Promise.all([
 
-      sfQuery(`SELECT HOUR("timestamp"),
+      sfQuery(`SELECT
+        CASE
+          WHEN TIME("timestamp") >= '06:00:00' AND TIME("timestamp") < '07:00:00' THEN 0
+          WHEN TIME("timestamp") >= '07:00:00' AND TIME("timestamp") < '08:00:00' THEN 1
+          WHEN TIME("timestamp") >= '08:10:00' AND TIME("timestamp") < '09:10:00' THEN 2
+          WHEN TIME("timestamp") >= '09:10:00' AND TIME("timestamp") < '10:00:00' THEN 3
+          WHEN TIME("timestamp") >= '10:40:00' AND TIME("timestamp") < '11:40:00' THEN 4
+          WHEN TIME("timestamp") >= '11:40:00' AND TIME("timestamp") < '12:30:00' THEN 5
+          WHEN TIME("timestamp") >= '12:40:00' AND TIME("timestamp") < '13:40:00' THEN 6
+          WHEN TIME("timestamp") >= '13:40:00' AND TIME("timestamp") < '14:40:00' THEN 7
+        END AS prod_period,
         COUNT(DISTINCT CASE WHEN "registrationPointDescription"='SPA2 BEV BodyOnLine' THEN "bodyNumber" END),
-        COUNT(DISTINCT CASE WHEN "registrationPointDescription"='998320 Empty Skid'   THEN "bodyNumber" END),
-        COUNT(DISTINCT CASE WHEN "registrationPointDescription" LIKE '%Heavy%'        THEN "bodyNumber" END)
+        COUNT(DISTINCT CASE WHEN "registrationPointDescription"='998320 Empty Skid'   THEN "bodyNumber" END)
         FROM VCCH.PRODUCTION_TRACKING.BODY_TRACKING
         WHERE DATE("timestamp")=CURRENT_DATE() AND "productionBody"=TRUE
-        GROUP BY HOUR("timestamp") ORDER BY 1`),
+        HAVING prod_period IS NOT NULL
+        GROUP BY prod_period ORDER BY 1`),
 
       sfQuery(`SELECT
         COUNT(DISTINCT CASE WHEN "registrationPointDescription"='SPA2 BEV BodyOnLine'   THEN "bodyNumber" END),
@@ -541,18 +553,25 @@ async function fetchAndUpdate() {
         LEFT JOIN geo_bodies g ON s."bodyNumber"=g."bodyNumber"`)
     ]);
 
-    // Process OPR hourly
-    let bc=0, sc=0, bo=[], so=[], hrs=[], bolEach=[], skidEach=[];
+    // Process OPR by production period (0–7)
+    // Build a map from period index → body counts
+    const periodMap = {};
     for (let i=0; i<hourly.length; i++) {
-      const hr = parseInt(hourly[i][0]);
-      if (hr < 6) continue;
-      const idx = Math.min(hr-6, BOL_SCHED.length-1);
-      const bHr = parseInt(hourly[i][1])||0;
-      const sHr = parseInt(hourly[i][2])||0;
+      const p = parseInt(hourly[i][0]);
+      if (p >= 0 && p <= 7) {
+        periodMap[p] = { bol: parseInt(hourly[i][1])||0, skid: parseInt(hourly[i][2])||0 };
+      }
+    }
+    // Only show periods that have data (production has started)
+    let bc=0, sc=0, bo=[], so=[], hrs=[], bolEach=[], skidEach=[];
+    for (let p=0; p<8; p++) {
+      if (!periodMap[p]) continue; // skip periods not yet started
+      const bHr = periodMap[p].bol;
+      const sHr = periodMap[p].skid;
       bc += bHr; sc += sHr;
-      bo.push(Math.round(bc/BOL_SCHED[idx]*1000)/10);
-      so.push(Math.round(sc/SKID_SCHED[idx]*1000)/10);
-      hrs.push((hr<10?'0':'')+hr+':00');
+      bo.push(Math.round(bc/BOL_SCHED[p]*1000)/10);
+      so.push(Math.round(sc/SKID_SCHED[p]*1000)/10);
+      hrs.push(PROD_LABELS[p]);
       bolEach.push(bHr);
       skidEach.push(sHr);
     }
