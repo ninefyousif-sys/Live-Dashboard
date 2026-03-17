@@ -79,6 +79,15 @@
     color:#444441; font-size:18px; cursor:pointer; z-index:50; opacity:0.5;
   }
   #settingsBtn:hover { opacity:1; color:#888780; }
+  /* Production status pill */
+  #prodStatus {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:4px 14px; border-radius:20px; font-size:12px; font-weight:500; white-space:nowrap;
+  }
+  .ps-running { background:#0d2018; color:#5DCAA5; border:1px solid #1D9E75; }
+  .ps-break   { background:#2a1c00; color:#EF9F27; border:1px solid #EF9F27; }
+  .ps-ended   { background:#1a1a1c; color:#5F5E5A; border:1px solid #2e2e30; }
+  .ps-pre     { background:#1a1a1c; color:#5F5E5A; border:1px solid #2e2e30; }
 </style>
 </head>
 <body>
@@ -111,7 +120,8 @@
         <div id="countdown" style="font-size:22px;font-weight:500;color:#5DCAA5;">0:30</div>
       </div>
       <div style="text-align:right;">
-        <div style="display:flex;align-items:center;gap:7px;justify-content:flex-end;">
+        <div style="display:flex;align-items:center;gap:10px;justify-content:flex-end;">
+          <div id="prodStatus" class="ps-pre">○ Loading...</div>
           <span class="dot" style="background:#1D9E75;"></span>
           <span style="font-size:16px;color:#5DCAA5;font-weight:500;">Live</span>
         </div>
@@ -295,12 +305,54 @@ function scaleTV() {
 }
 scaleTV(); window.addEventListener('resize', scaleTV);
 
+// ── Shift schedule ──
+const SHIFT_BREAKS = [
+  {s:[8,0],  e:[8,10]},
+  {s:[10,0], e:[10,40]},
+  {s:[12,30],e:[12,40]}
+];
+const SHIFT_S = 6*60, SHIFT_E = 14*60+40;
+
+function fmtT(hm) {
+  const ap = hm[0]>=12?'PM':'AM';
+  const h  = hm[0]>12?hm[0]-12:(hm[0]===0?12:hm[0]);
+  return h+':'+(hm[1]<10?'0':'')+hm[1]+' '+ap;
+}
+
+function updateProdStatus() {
+  const now  = new Date();
+  const mins = now.getHours()*60 + now.getMinutes();
+  const el   = document.getElementById('prodStatus');
+  if (!el) return;
+  if (mins < SHIFT_S) {
+    el.className='ps-pre'; el.textContent='○  Pre-Shift · Starts 6:00 AM'; return;
+  }
+  if (mins >= SHIFT_E) {
+    el.className='ps-ended'; el.textContent='○  Shift Ended · 2:40 PM'; return;
+  }
+  for (const b of SHIFT_BREAKS) {
+    const bs=b.s[0]*60+b.s[1], be=b.e[0]*60+b.e[1];
+    if (mins>=bs && mins<be) {
+      const left=be-mins;
+      el.className='ps-break';
+      el.textContent='◉  Break Time · Resumes in '+left+' min ('+fmtT(b.e)+')';
+      return;
+    }
+  }
+  let nxt=null;
+  for (const b of SHIFT_BREAKS) { if (b.s[0]*60+b.s[1]>mins){nxt=b;break;} }
+  el.className='ps-running';
+  el.textContent='●  Production Running'+(nxt?' · Next break '+fmtT(nxt.s):' · No more breaks today');
+}
+
 // ── Live clock ──
 setInterval(function(){
   const t = new Date().toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
   document.getElementById('clockEl').textContent = t;
   document.getElementById('statusTime').textContent = t;
+  updateProdStatus();
 }, 1000);
+updateProdStatus();
 
 // ── Chart setup ──
 Chart.defaults.color='#888780'; Chart.defaults.borderColor='#252527';
@@ -311,30 +363,47 @@ const ptC  = (v,t) => v>=t?'#5DCAA5':v>=t*.9?'#EF9F27':'#F0997B';
 const bgC  = (v,t) => v>=t?'#0d2018':v>=t*.9?'#2a1c00':'#2a0a0a';
 const oprColor = (v,t) => v>=t?'#5DCAA5':v>=t*.9?'#EF9F27':'#F0997B';
 
-function buildOprChart(canvasId, labels, data, lc, tgt, avg, avgC) {
+function buildOprChart(canvasId, labels, data, lc, tgt, avg, avgC, bodies) {
   const n = labels.length;
+  const maxBodies = bodies && bodies.length ? Math.max.apply(null,bodies) : 1;
+  const datasets = [
+    // Bodies per hour — bars in background
+    {type:'bar', data: bodies||[], yAxisID:'y2',
+      backgroundColor:'rgba(120,120,130,0.18)', borderColor:'rgba(120,120,130,0.3)',
+      borderWidth:1, borderRadius:4,
+      datalabels:{display:true,anchor:'end',align:'top',offset:1,
+        font:{size:11,weight:'500'},color:'#5F5E5A',
+        formatter:function(v){return v>0?v:'';}
+      }
+    },
+    // OPR % line
+    {type:'line', data, borderColor:lc, borderWidth:3, yAxisID:'y',
+      pointBackgroundColor:data.map(v=>ptC(v,tgt)),
+      pointBorderColor:'#0e0e10',pointBorderWidth:3,pointRadius:7,
+      fill:false,tension:0.35,
+      datalabels:{display:true,
+        align:function(ctx){const i=ctx.dataIndex;return i===0?'right':i===n-1?'left':data[i]>=(data[i-1]||0)?'top':'bottom';},
+        offset:7,font:{size:13,weight:'600'},
+        color:function(ctx){return ptC(ctx.dataset.data[ctx.dataIndex],tgt);},
+        backgroundColor:function(ctx){return bgC(ctx.dataset.data[ctx.dataIndex],tgt);},
+        borderRadius:5,padding:{top:3,bottom:3,left:6,right:6},
+        formatter:function(v){return v+'%';}}
+    },
+    {type:'line',data:Array(n).fill(tgt),borderColor:'#EF9F27',borderWidth:2,borderDash:[8,5],pointRadius:0,fill:false,yAxisID:'y',datalabels:{display:false}},
+    {type:'line',data:Array(n).fill(avg),borderColor:avgC,borderWidth:1.5,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y',datalabels:{display:false}}
+  ];
   return new Chart(document.getElementById(canvasId), {
-    type:'line',
-    data:{labels,datasets:[
-      {data,borderColor:lc,borderWidth:3,
-        pointBackgroundColor:data.map(v=>ptC(v,tgt)),
-        pointBorderColor:'#0e0e10',pointBorderWidth:3,pointRadius:7,
-        fill:false,tension:0.35,
-        datalabels:{display:true,
-          align:function(ctx){const i=ctx.dataIndex;return i===0?'right':i===n-1?'left':data[i]>=data[i-1]?'top':'bottom';},
-          offset:7,font:{size:13,weight:'600'},
-          color:function(ctx){return ptC(ctx.dataset.data[ctx.dataIndex],tgt);},
-          backgroundColor:function(ctx){return bgC(ctx.dataset.data[ctx.dataIndex],tgt);},
-          borderRadius:5,padding:{top:3,bottom:3,left:6,right:6},
-          formatter:function(v){return v+'%';}}},
-      {data:Array(n).fill(tgt),borderColor:'#EF9F27',borderWidth:2,borderDash:[8,5],pointRadius:0,fill:false,datalabels:{display:false}},
-      {data:Array(n).fill(avg),borderColor:avgC,borderWidth:1.5,borderDash:[4,4],pointRadius:0,fill:false,datalabels:{display:false}}
-    ]},
+    type:'bar',
+    data:{labels,datasets},
     options:{responsive:true,maintainAspectRatio:false,
       layout:{padding:{top:28,left:6,right:6}},
       plugins:{legend:{display:false},datalabels:{}},
-      scales:{y:{min:40,max:100,ticks:{font:{size:13},callback:function(v){return v+'%';}},grid:{color:'#252527'}},
-              x:{ticks:{font:{size:12}},grid:{display:false}}}}
+      scales:{
+        y:{min:40,max:100,ticks:{font:{size:13},callback:function(v){return v+'%';}},grid:{color:'#252527'}},
+        y2:{position:'right',min:0,max:maxBodies*4,grid:{display:false},ticks:{display:false}},
+        x:{ticks:{font:{size:12}},grid:{display:false}}
+      }
+    }
   });
 }
 
@@ -405,14 +474,14 @@ function applyData(d) {
   if (skidChart) { skidChart.destroy(); skidChart = null; }
   if (tpChart)   { tpChart.destroy();   tpChart   = null; }
 
-  bolChart  = buildOprChart('bolChart',  o.hours, o.bol_opr,  '#85B7EB', o.bol_target,  o.bol_avg,  '#5DCAA5');
-  skidChart = buildOprChart('skidChart', o.hours, o.skid_opr, '#5DCAA5', o.skid_target, o.skid_avg, '#85B7EB');
+  bolChart  = buildOprChart('bolChart',  o.hours, o.bol_opr,  '#85B7EB', o.bol_target,  o.bol_avg,  '#5DCAA5', o.bol_bodies);
+  skidChart = buildOprChart('skidChart', o.hours, o.skid_opr, '#5DCAA5', o.skid_target, o.skid_avg, '#85B7EB', o.skid_bodies);
   tpChart   = buildTpChart(d.history.map(function(h){return h.day;}), d.history.map(function(h){return h.bodies;}));
 }
 
 // ── Fetch directly from Snowflake ──
 const BOL_SCHED  = [13,25,38,48,61,71,84,97,97,97,97];
-const SKID_SCHED = [13,27,40,51,64,76,89,102,102,102,102];
+const SKID_SCHED = [13,27,40,51,64,75,89,102,102,102,102];
 const BOL_TARGET  = 88.2;
 const SKID_TARGET = 83.3;
 
@@ -473,16 +542,19 @@ async function fetchAndUpdate() {
     ]);
 
     // Process OPR hourly
-    let bc=0, sc=0, bo=[], so=[], hrs=[];
+    let bc=0, sc=0, bo=[], so=[], hrs=[], bolEach=[], skidEach=[];
     for (let i=0; i<hourly.length; i++) {
       const hr = parseInt(hourly[i][0]);
       if (hr < 6) continue;
       const idx = Math.min(hr-6, BOL_SCHED.length-1);
-      bc += parseInt(hourly[i][1])||0;
-      sc += parseInt(hourly[i][2])||0;
+      const bHr = parseInt(hourly[i][1])||0;
+      const sHr = parseInt(hourly[i][2])||0;
+      bc += bHr; sc += sHr;
       bo.push(Math.round(bc/BOL_SCHED[idx]*1000)/10);
       so.push(Math.round(sc/SKID_SCHED[idx]*1000)/10);
       hrs.push((hr<10?'0':'')+hr+':00');
+      bolEach.push(bHr);
+      skidEach.push(sHr);
     }
 
     const t = totalsRaw[0] || [];
@@ -508,7 +580,8 @@ async function fetchAndUpdate() {
         skid_avg: so.length ? Math.round(so.reduce(function(a,b){return a+b;},0)/so.length*10)/10 : 0,
         bol_cum:  bo.length ? bo[bo.length-1] : 0,
         skid_cum: so.length ? so[so.length-1] : 0,
-        bol_target: BOL_TARGET, skid_target: SKID_TARGET
+        bol_target: BOL_TARGET, skid_target: SKID_TARGET,
+        bol_bodies: bolEach, skid_bodies: skidEach
       },
       history: hist.map(function(r){return {day:r[0], bodies:parseInt(r[1])||0};})
     };
