@@ -81,7 +81,7 @@
   #settingsBtn:hover { opacity:1; color:#888780; }
   /* Production status pill */
   #prodStatus {
-    display:inline-flex; align-items:center; gap:6px; margin-top:6px;
+    display:inline-flex; align-items:center; gap:6px;
     padding:4px 14px; border-radius:20px; font-size:12px; font-weight:500; white-space:nowrap;
   }
   .ps-running { background:#0d2018; color:#5DCAA5; border:1px solid #1D9E75; }
@@ -120,13 +120,13 @@
         <div id="countdown" style="font-size:22px;font-weight:500;color:#5DCAA5;">0:30</div>
       </div>
       <div style="text-align:right;">
-        <div style="display:flex;align-items:center;gap:7px;justify-content:flex-end;">
+        <div style="display:flex;align-items:center;gap:10px;justify-content:flex-end;">
+          <div id="prodStatus" class="ps-pre">○ Loading...</div>
           <span class="dot" style="background:#1D9E75;"></span>
           <span style="font-size:16px;color:#5DCAA5;font-weight:500;">Live</span>
         </div>
         <div style="font-size:13px;color:#5F5E5A;margin-top:3px;">Data as of <span id="dataTime">—</span></div>
         <div id="clockEl" style="font-size:13px;color:#444441;margin-top:1px;">—</div>
-        <div id="prodStatus" class="ps-pre">○ Loading...</div>
       </div>
     </div>
   </div>
