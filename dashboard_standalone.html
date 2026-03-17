@@ -50,30 +50,29 @@
   .status-bar { position:fixed; bottom:0; left:0; right:0; background:#111113; padding:4px 16px; display:flex; gap:20px; font-size:11px; color:#5F5E5A; }
   .dot { width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:5px; }
   #errorBanner { display:none; position:fixed; top:0; left:0; right:0; background:#7a1a0a; color:#fff; text-align:center; padding:8px; font-size:14px; z-index:100; }
-  /* Token prompt overlay */
+  /* Password overlay */
   #tokenOverlay {
-    position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:999;
+    position:fixed; inset:0; background:#0e0e10; z-index:999;
     display:flex; align-items:center; justify-content:center;
   }
   #tokenBox {
     background:#1a1a1c; border:1px solid #2e2e30; border-radius:16px;
-    padding:40px 48px; width:520px; max-width:92vw;
+    padding:48px 56px; width:400px; max-width:92vw; text-align:center;
   }
-  #tokenBox h2 { font-size:22px; font-weight:500; color:#f0efeb; margin-bottom:6px; }
-  #tokenBox p  { font-size:14px; color:#888780; margin-bottom:24px; line-height:1.6; }
-  #tokenBox label { font-size:13px; color:#888780; display:block; margin-bottom:6px; }
-  #patInput {
+  #tokenBox .logo { font-size:12px; color:#5F5E5A; letter-spacing:2px; text-transform:uppercase; margin-bottom:14px; }
+  #tokenBox h2 { font-size:26px; font-weight:400; color:#f0efeb; margin-bottom:30px; }
+  #pwInput {
     width:100%; background:#111113; border:1px solid #3a3a3c; border-radius:8px;
-    color:#f0efeb; font-size:13px; padding:10px 14px; font-family:monospace;
-    outline:none; margin-bottom:20px;
+    color:#f0efeb; font-size:28px; padding:14px 16px; text-align:center;
+    outline:none; margin-bottom:18px; letter-spacing:6px;
   }
-  #patInput:focus { border-color:#378ADD; }
+  #pwInput:focus { border-color:#378ADD; }
   #connectBtn {
-    background:#378ADD; color:#fff; border:none; border-radius:8px;
-    padding:10px 28px; font-size:15px; cursor:pointer; font-weight:500;
+    width:100%; background:#378ADD; color:#fff; border:none; border-radius:8px;
+    padding:14px; font-size:16px; cursor:pointer; font-weight:500;
   }
   #connectBtn:hover { background:#4a9ee8; }
-  #tokenErr { color:#F0997B; font-size:13px; margin-top:10px; display:none; }
+  #tokenErr { color:#F0997B; font-size:13px; margin-top:12px; display:none; }
   /* Settings gear */
   #settingsBtn {
     position:fixed; bottom:22px; right:16px; background:none; border:none;
@@ -83,21 +82,19 @@
 </style>
 </head>
 <body>
-<!-- Token Prompt Overlay -->
+<!-- Password Overlay -->
 <div id="tokenOverlay">
   <div id="tokenBox">
+    <div class="logo">Volvo Cars Charleston</div>
     <h2>A-Shop Live Dashboard</h2>
-    <p>Paste your Snowflake Programmatic Access Token (PAT) to connect.<br>
-    Your token is never stored — it lives only in this browser tab.</p>
-    <label for="patInput">Snowflake PAT Token</label>
-    <textarea id="patInput" rows="3" placeholder="eyJraWQiOiI..."></textarea>
-    <br>
+    <input id="pwInput" type="password" placeholder="••••••" autocomplete="off"
+      onkeydown="if(event.key==='Enter') connectWithToken()" />
     <button id="connectBtn" onclick="connectWithToken()">Connect →</button>
-    <div id="tokenErr">Token looks empty — please paste your full PAT token.</div>
+    <div id="tokenErr">Incorrect password. Try again.</div>
   </div>
 </div>
 
-<button id="settingsBtn" title="Change token" onclick="document.getElementById('tokenOverlay').style.display='flex'">⚙</button>
+<button id="settingsBtn" title="Lock dashboard" onclick="document.getElementById('tokenOverlay').style.display='flex';document.getElementById('pwInput').value='';">⚙</button>
 
 <div id="errorBanner"></div>
 <div id="tvWrap"><div id="tvInner">
@@ -230,22 +227,28 @@
 <script>
 // ── Snowflake REST API ──
 const SF_URL = 'https://VOLVOCARS-MANUFACTURINGANALYTICS.snowflakecomputing.com/api/v2/statements';
-let SF_HDR = null; // Set after user enters token
+let SF_HDR = null;
+
+// Encoded token — decoded at runtime after password check
+const _tk = 'ZXlKcmFXUWlPaUl5TnpnM05qUTVNak16TXpjeU1UZ2lMQ0poYkdjaU9pSkZVekkxTmlKOS5leUp3SWpvaU5ESTFNelkxTWpnMk5UbzBNalV6TmpFNU16TXpJaXdpYVhOeklqb2lVMFk2TVRBeE1TSXNJbVY0Y0NJNk1UZ3dOVEl6TlRZMk0zMC5SSEt3NGJvN1REeXV0Y1ozeUF0R2NxMmpSM1BiNm5vMjBhWDVNam04M09ZTXYyeEJTc3hpZjNJZVdMYnFiMW9IODE1OEI0MzFCZGNha1pBdFZ1S0FUdw==';
+const _pw = 'vcchninefyousif';
 
 function connectWithToken() {
-  const raw = document.getElementById('patInput').value.trim();
-  if (!raw) {
+  const entered = document.getElementById('pwInput').value.trim();
+  if (entered !== _pw) {
     document.getElementById('tokenErr').style.display = 'block';
+    document.getElementById('pwInput').value = '';
     return;
   }
   document.getElementById('tokenErr').style.display = 'none';
+  const pat = atob(_tk);
   SF_HDR = {
-    'Authorization': 'Bearer ' + raw,
+    'Authorization': 'Bearer ' + pat,
     'X-Snowflake-Authorization-Token-Type': 'PROGRAMMATIC_ACCESS_TOKEN',
     'Content-Type': 'application/json'
   };
   document.getElementById('tokenOverlay').style.display = 'none';
-  startDashboard(); // kick off data load + refresh timer
+  startDashboard();
 }
 
 async function sfQuery(sql, database, schema) {
